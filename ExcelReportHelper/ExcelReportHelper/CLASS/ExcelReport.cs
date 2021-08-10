@@ -14,7 +14,10 @@ using System.Data;
 using System.Threading;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 using System.Text.RegularExpressions;
+using System.Drawing;
+using System.IO;
 #endregion
 
 namespace ExcelReportHelper
@@ -27,8 +30,6 @@ namespace ExcelReportHelper
         Microsoft.Office.Interop.Excel.Worksheet ws1 = null; //sheet1
 
         string sFileName = "";
-        object[,] rngData;
-
         DataSet ds = null;
         DataTable dt = null;
         int[] m_CellLoc;
@@ -45,12 +46,12 @@ namespace ExcelReportHelper
         /// <param name="sFileName"> 출력 파일명 (경로포함 fullname) </param>
         /// <param name="dtinfo"> 데이터그룹정보 </param>
         /// <param name="dataSet"> 출력 데이터셋 </param>
-        internal ExcelReport(string sFileName, List<ExeclReportDtInfo> execlReportDtInfo,  DataSet dataSet)
+        internal ExcelReport(string sFileName, List<ExeclReportDtInfo> execlReportDtInfo, DataSet dataSet)
         {
             this.sFileName = sFileName;
             this.dtinfo = execlReportDtInfo;
             this.ds = dataSet;
-        }     
+        }
 
         private static void ReleaseExcelObject(object obj)
         {
@@ -75,14 +76,29 @@ namespace ExcelReportHelper
 
         // 셀을 x,y 값으로
         private static int[] CellToXY(string s)
-        {  
-            int[] returnobj = new int[] { 1, 1 };
+        {
+            int[] returnobj = new int[] { 1, 1, 1, 1 };
+            string sX = "1";
+            string sY = "A";
+            string[] sR = s.Split(':');
             // x 숫자짜르기
-            string sX = Regex.Replace(s, @"\D", "");//숫자 추출
+            sX = Regex.Replace(sR[0], @"\D", "");//숫자 추출
             returnobj[0] = string.IsNullOrEmpty(sX) ? 1 : Convert.ToInt32(sX);
+            returnobj[2] = string.IsNullOrEmpty(sX) ? 1 : Convert.ToInt32(sX);
             // y 
-            string sY = Regex.Replace(s, @"\d", "");//문자 추출
+            sY = Regex.Replace(sR[0], @"\d", "");//문자 추출
             returnobj[1] = iTransAlpha(sY);
+            returnobj[3] = iTransAlpha(sY);
+
+            // end cell
+            if (sR.Length > 1)
+            {
+                sX = Regex.Replace(sR[1], @"\D", "");//숫자 추출
+                returnobj[2] = string.IsNullOrEmpty(sX) ? 1 : Convert.ToInt32(sX);
+                // y 
+                sY = Regex.Replace(sR[1], @"\d", "");//문자 추출
+                returnobj[3] = iTransAlpha(sY);
+            }
 
             return returnobj;
         }
@@ -113,37 +129,51 @@ namespace ExcelReportHelper
         /// <param name="orientation"> 방향 </param>
         /// <param name="home">시작위치 </param>
         /// <returns></returns>
-        static int[] FindCell(object[,] array, string elem, string orientation, string home)
+        static int[] FindCell(Microsoft.Office.Interop.Excel.Worksheet ws, string elem, string orientation, string home)
         {
-            int[] returnVal = new int[2] { 0, 0 };
+            Microsoft.Office.Interop.Excel.Range rng = ws.UsedRange;   //현재 시트에서 사용중인 범위
+            object[,] array = rng.Value; //범위의 데이터
+
+            int[] returnVal = new int[4] { 0, 0, 0, 0 }; // start row , start column, end row, end solumn
 
             int rowEndIndx = array.GetLength(0);
             int colEndIndx = array.GetLength(1);
 
             int[] homeindex = CellToXY(home);
-             int rowStartIndx = homeindex[0];
+            int rowStartIndx = homeindex[0];
             int colStartIndx = homeindex[1];
 
-            if (orientation.Equals( "V"))
-                colEndIndx = colStartIndx;
-            if (orientation.Equals("H"))
-                rowEndIndx = rowStartIndx;
-            else if (orientation.Equals("N"))
+            if (orientation.Equals("N"))
                 return homeindex;
+
+            //if (orientation.Equals( "V"))
+            //    colEndIndx = colStartIndx;
+            //if (orientation.Equals("H"))
+            //    rowEndIndx = rowStartIndx;
+            //else if (orientation.Equals("N"))
+            //    return homeindex;
 
             for (int rowIndex = rowStartIndx; rowIndex <= rowEndIndx; rowIndex++)
             {
                 for (int colIndex = colStartIndx; colIndex <= colEndIndx; colIndex++)
                 {
-                    if (Convert.ToString(array[rowIndex, colIndex]) == elem)
+                    if (Convert.ToString(array[rowIndex, colIndex]).Replace(" ", string.Empty) == elem) // find caption 
                     {
+                        // find merge 
+                        Microsoft.Office.Interop.Excel.Range oRange = (Microsoft.Office.Interop.Excel.Range)ws.Cells[rowIndex, colIndex];
+                        Microsoft.Office.Interop.Excel.Range oRange2 = (Microsoft.Office.Interop.Excel.Range)oRange.MergeArea;
+                        int iLastCol = colIndex + oRange2.Columns.Count - 1;
+                        int iLastRow = rowIndex + oRange2.Rows.Count - 1;
+
                         returnVal.SetValue(rowIndex, 0);
                         returnVal.SetValue(colIndex, 1);
+                        returnVal.SetValue(iLastRow, 2);
+                        returnVal.SetValue(iLastCol, 3);
                         return returnVal;
                     }
                 }
             }
-            return returnVal; 
+            return returnVal;
         }
 
         /// <summary>
@@ -160,36 +190,116 @@ namespace ExcelReportHelper
                 excelApp = new Microsoft.Office.Interop.Excel.Application();
                 wb = excelApp.Workbooks.Open(this.sFileName);
                 ws1 = wb.Worksheets.get_Item(1) as Microsoft.Office.Interop.Excel.Worksheet;
-                Microsoft.Office.Interop.Excel.Range rng = ws1.UsedRange;   //현재 시트에서 사용중인 범위
-                rngData = rng.Value; //범위의 데이터
+                //Microsoft.Office.Interop.Excel.Range rng = ws1.UsedRange;   //현재 시트에서 사용중인 범위
+                //rngData = rng.Value; //범위의 데이터
 
                 //-------------------------------
-                for (int iLoop1 = 0; iLoop1 < dtinfo.Count ; iLoop1++) // 데이터테이블
+                for (int iLoop1 = 0; iLoop1 < dtinfo.Count; iLoop1++) // 데이터테이블
                 {
+
                     iRepeatCnt = 0;
                     dt = ds.Tables[iLoop1];
                     m_dtinfo = dtinfo[iLoop1];
                     for (int iLoop2 = 0; iLoop2 < dt.Rows.Count; iLoop2++) // 로우
                     {
-                        if (iRepeatCnt >= m_dtinfo.iReCnt) 
+                        if (iRepeatCnt >= m_dtinfo.iReCnt)
                             break;
 
                         for (int iLoop3 = 0; iLoop3 < dt.Columns.Count; iLoop3++) // 캡션
                         {
-                            m_CellLoc = FindCell(rngData, dt.Columns[iLoop3].ColumnName, m_dtinfo.sOrientation, m_dtinfo.sHomeCell[iRepeatCnt]);
+                            m_CellLoc = FindCell(ws1, dt.Columns[iLoop3].ColumnName, m_dtinfo.sOrientation, m_dtinfo.sHomeCell[iRepeatCnt]);
+
                             if (m_CellLoc[0] == 0) // 캡션을 못찾는경우 0으로 반환함. 건너뜀.
                                 continue;
-                            // 할당. ( 캡션의 위치 + 방향값 + 줄바꿈반영값 
-                            ws1.Cells[m_CellLoc[0] + m_dtinfo.iH + (m_dtinfo.iH * (iLoop2 % m_dtinfo.iMaxRow))
-                                            , m_CellLoc[1] + m_dtinfo.iV + (m_dtinfo.iV * (iLoop2 % m_dtinfo.iMaxRow))]
-                                             = dt.Rows[iLoop2][dt.Columns[iLoop3].ColumnName];
+
+                            switch (dt.Columns[iLoop3].ColumnName.ToUpper())
+                            {
+                                case "QR":
+                                case "QRCODE":
+                                    // QR 생성 처리 ... 
+                                    break;
+                                case "BARCODE":
+                                    // 바코드 생성 처리 ... 
+                                    break;
+                                case "이미지":
+                                case "IMAGE":
+                                    try
+                                    {
+                                        if (dt.Rows[iLoop2][dt.Columns[iLoop3].ColumnName] == null)
+                                            break;
+
+                                        string id = Convert.ToString(DateTime.Now.ToString("yyyyMMddhhmmss"));
+                                        string startPath = Application.StartupPath + "\\";
+
+                                        Microsoft.Office.Interop.Excel.Range oRange = null;
+                                        float fLeft = 0;
+                                        float fTop = 0;
+                                        float fHeight = 0;
+                                        float fWidth = 0;
+
+                                        oRange = (Microsoft.Office.Interop.Excel.Range)ws1.Cells[m_CellLoc[0], m_CellLoc[1]];
+                                        Microsoft.Office.Interop.Excel.Range oRange2 = (Microsoft.Office.Interop.Excel.Range)oRange.MergeArea;
+
+                                        fLeft = (float)((double)oRange2.Left + (double)3);
+                                        fTop = (float)((double)oRange2.Top + (double)3);
+                                        fHeight = (float)((double)oRange2.Height - (double)6);
+                                        fWidth = (float)((double)oRange2.Width - (double)6);
+
+                                        byte[] bImage = (byte[])dt.Rows[iLoop2][dt.Columns[iLoop3].ColumnName];
+                                        MemoryStream ms = new MemoryStream();
+                                        Image img = null;
+                                        ms.Position = 0;
+                                        ms.Write(bImage, 0, (int)bImage.Length);
+                                        img = Image.FromStream(ms);
+
+                                        img.Save(startPath + id + ".png");
+                                        ws1.Shapes.AddPicture(startPath + id + ".png", Microsoft.Office.Core.MsoTriState.msoFalse, Microsoft.Office.Core.MsoTriState.msoCTrue, fLeft, fTop, fWidth, fHeight);
+                                        File.Delete(startPath + id + ".png");
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        throw new Exception(ex.Message);
+                                    }
+                                    break;
+                                default:
+                                    // 할당. ( 캡션의 위치 + 방향값 + 증가값 - 최대값이후
+                                    ws1.Cells[(m_dtinfo.iH.Equals((int)1) ? m_CellLoc[2] : m_CellLoc[0]) + m_dtinfo.iH + (m_dtinfo.iH * iLoop2) - (m_dtinfo.iH * iRepeatCnt * m_dtinfo.iMaxRow)
+                                                , (m_dtinfo.iV.Equals((int)1) ? m_CellLoc[3] : m_CellLoc[1]) + m_dtinfo.iV + (m_dtinfo.iV * iLoop2) - (m_dtinfo.iV * iRepeatCnt * m_dtinfo.iMaxRow)]
+                                                 = dt.Rows[iLoop2][dt.Columns[iLoop3].ColumnName];
+
+                                    break;
+                            } //    switch
+                        } // for (int iLoop3 
+
+                        // MAXROW 넘었을때.
+                        if (iLoop2 >= m_dtinfo.iMaxRow)
+                        {
+                            switch (m_dtinfo.sContinueMode)
+                            {
+                                case "N":      // 없음. 해당데이터 종료.    
+                                default:
+                                    iRepeatCnt = iRepeatCnt + 1;
+                                    break;
+                                case "A":      // 로우 추가     
+                                    // $$오류발생
+                                    if (m_dtinfo.iV == 1 ? true : false)
+                                        ws1.Columns.Insert(m_CellLoc[1] + m_dtinfo.iV + m_dtinfo.iMaxRow, Microsoft.Office.Interop.Excel.XlInsertFormatOrigin.xlFormatFromRightOrBelow);
+                                    else
+                                        ws1.Rows.Insert(m_CellLoc[0] + m_dtinfo.iH + m_dtinfo.iMaxRow, Microsoft.Office.Interop.Excel.XlInsertFormatOrigin.xlFormatFromRightOrBelow);
+                                    break;
+                                case "P":      // 새페이지.
+                                               //출력 처리 혹은... sheet 복사 ? 
+                                    iRepeatCnt = iRepeatCnt + 1;
+                                    break;
+                                case "R":      // 다른위치
+                                    if ((iLoop2 + 1) % m_dtinfo.iMaxRow == 0)
+                                        iRepeatCnt = iRepeatCnt + 1;
+                                    break;
+                            }//switch (m_dtinfo.sContinueMode)                       
                         }
 
-                        //max행 넘으면 줄바꿈
-                        if ((iLoop2 + 1)  % m_dtinfo.iMaxRow == 0) 
-                            iRepeatCnt = iRepeatCnt + 1;
-                    }
-                }
+                    }// for (int iLoop2
+                }// for (int iLoop1
 
                 //-------------------------------
                 //print 
@@ -198,17 +308,17 @@ namespace ExcelReportHelper
                 //ws1.PageSetup.PaperSize = Microsoft.Office.Interop.Excel.XlPaperSize.xlPaperA4; // A4로 설정
                 //ws1.PageSetup.Orientation = Microsoft.Office.Interop.Excel.XlPageOrientation.xlLandscape; //가로로 출력
 
-                ws1.PrintOut(1, 1, 1, false, sPrintName); 
+                ws1.PrintOut(1, Type.Missing, 1, false, sPrintName);
                 // (시작 페이지 번호, 마지막 페이지 번호, 출력 장 수, 프리뷰 활성 유/무, 활성프린터명, 파일로인쇄 (true), 여러장 한부씩 인쇄, 인쇄할 파일이름)                                              
                 // PrintOut ?
-               // object From /// 인쇄를 시작할 페이지 번호입니다. 이 인수를 생략하면 인쇄가 처음부터 시작됩니다.
-               // , Object To     /// 인쇄할 마지막 페이지 번호입니다. 이 인수를 생략하면 마지막 페이지까지 인쇄됩니다.
-               // , object Copies    /// 인쇄할 매수입니다. 이 인수를 생략하면 한 부만 인쇄됩니다.
-               // , object Preview   /// Microsoft Office Excel에서 개체를 인쇄하기 전에 인쇄 미리 보기를 호출하려면 true이고, 개체를 즉시 인쇄하려면 false(또는 생략)입니다.
-               // , object ActivePrinter  /// 활성 프린터의 이름을 설정합니다
-               // , object PrintToFile  /// 파일로 인쇄하는 경우 true입니다. PrToFileName이 지정되지 않으면 Excel에서 출력 파일의 이름을 입력하라는 메시지를 표시합니다.
-               // , object Collate   /// 여러 장을 한 부씩 인쇄하는 경우 true입니다.
-               // , object PrToFileName  /// PrintToFile이 true로 설정되면 이 인수는 인쇄할 파일의 이름을 지정합니다.
+                // object From /// 인쇄를 시작할 페이지 번호입니다. 이 인수를 생략하면 인쇄가 처음부터 시작됩니다.
+                // , Object To     /// 인쇄할 마지막 페이지 번호입니다. 이 인수를 생략하면 마지막 페이지까지 인쇄됩니다.
+                // , object Copies    /// 인쇄할 매수입니다. 이 인수를 생략하면 한 부만 인쇄됩니다.
+                // , object Preview   /// Microsoft Office Excel에서 개체를 인쇄하기 전에 인쇄 미리 보기를 호출하려면 true이고, 개체를 즉시 인쇄하려면 false(또는 생략)입니다.
+                // , object ActivePrinter  /// 활성 프린터의 이름을 설정합니다
+                // , object PrintToFile  /// 파일로 인쇄하는 경우 true입니다. PrToFileName이 지정되지 않으면 Excel에서 출력 파일의 이름을 입력하라는 메시지를 표시합니다.
+                // , object Collate   /// 여러 장을 한 부씩 인쇄하는 경우 true입니다.
+                // , object PrToFileName  /// PrintToFile이 true로 설정되면 이 인수는 인쇄할 파일의 이름을 지정합니다.
 
             }
             catch (Exception ex)
@@ -223,7 +333,7 @@ namespace ExcelReportHelper
                 if (wb != null)
                 {
                     // Clean up
-                    wb.Close(0);            
+                    wb.Close(0);
                     ReleaseExcelObject(ws1);
                     ReleaseExcelObject(wb);
                 }
@@ -231,7 +341,7 @@ namespace ExcelReportHelper
                 excelApp.Quit();
                 ReleaseExcelObject(excelApp);
                 excelApp = null;
-                wb = null;            
+                wb = null;
 
                 if (processId != 0)
                 {

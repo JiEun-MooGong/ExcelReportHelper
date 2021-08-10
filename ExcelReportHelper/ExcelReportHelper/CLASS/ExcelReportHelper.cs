@@ -12,7 +12,6 @@ DESCRIPT    :
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -21,7 +20,7 @@ using System.Windows.Forms;
 #endregion
 
 namespace ExcelReportHelper
-{   
+{
     public class ExcelReportHelper
     {
         #region < 멤버 변수 >
@@ -29,7 +28,7 @@ namespace ExcelReportHelper
         private DataSet ds;
         private string sInfoWhere;
         private string sDataWhere;
-        
+
         private string sFileName;
         private string sProcedure;
 
@@ -90,44 +89,63 @@ namespace ExcelReportHelper
         /// 레포트 유형에서도 각 조건별 출력해야할 파일이름과 데이터그룹정보가져옴. 
         /// </summary>
         private void GetReportInfo()
-        {     
+        {
             // 레포트기준정보 조회
             DBHelper helper;
             helper = new DBHelper(false);
             try
             {
                 DataSet dstemp = helper.FillDataSet("EXCELREPORTINFO_S", CommandType.StoredProcedure
-                    , helper.CreateParameter("AS_PLANTCODE", DBHelper.nvlString(PlantCode), DbType.String, ParameterDirection.Input)
+                    , helper.CreateParameter("AS_PLANTCODE", DBHelper.nvlString(LoginInfo.PlantCode), DbType.String, ParameterDirection.Input)
                        , helper.CreateParameter("AS_KEYWORD", DBHelper.nvlString(sKeyword), DbType.String, ParameterDirection.Input)
                          //, helper.CreateParameter("AS_PARAMETERS", DBHelper.nvlString(sKey), DbType.String, ParameterDirection.Input)
                          , helper.CreateParameter("RS_FILENAME", DbType.String, ParameterDirection.Output, null, 100)
                          , helper.CreateParameter("RS_PROCNAME", DbType.String, ParameterDirection.Output, null, 100)
                        );
 
-                if (dstemp.Tables.Count <= 0)
-                    throw new Exception("EXCELREPORTINFO_S " + " NO DATA!!");
-            
-                this.sFileName = DBHelper.nvlString(helper.Parameters["RS_FILENAME"].Value);
-                this.sProcedure = DBHelper.nvlString(helper.Parameters["RS_PROCNAME"].Value);
-
-                for (int iloop = 0; iloop < dstemp.Tables[0].Rows.Count; iloop++)
+                if (helper.RSCODE == "S")
                 {
-                    ExeclReportDtInfo dtInfotemp = new ExeclReportDtInfo(DBHelper.nvlInt(dstemp.Tables[0].Rows[iloop]["TABLEGROUP"])
-                                                                                                     , DBHelper.nvlString(dstemp.Tables[0].Rows[iloop]["ORIENTATION"])
-                                                                                                    , DBHelper.nvlString(dstemp.Tables[0].Rows[iloop]["HOMECELL"])
-                                                                                                    , DBHelper.nvlInt(dstemp.Tables[0].Rows[iloop]["MAXIMUM"])
-                                                                                                    , DBHelper.nvlInt(dstemp.Tables[0].Rows[iloop]["REPEATCOUNT"])
-                                                                                                    );
-                    dtinfo.Add(dtInfotemp);
+                    if (dstemp.Tables.Count <= 0)
+                    {
+                        throw new Exception("EXCELREPORTINFO_S " + " NO DATA!!");
+                    }
+
+                    this.sFileName = DBHelper.nvlString(helper.Parameters["RS_FILENAME"].Value);
+                    this.sProcedure = DBHelper.nvlString(helper.Parameters["RS_PROCNAME"].Value);
+
+                    for (int iloop = 0; iloop < dstemp.Tables[0].Rows.Count; iloop++)
+                    {
+                        ExeclReportDtInfo dtInfotemp = new ExeclReportDtInfo(DBHelper.nvlInt(dstemp.Tables[0].Rows[iloop]["TABLEGROUP"])
+                                                                                                         , DBHelper.nvlString(dstemp.Tables[0].Rows[iloop]["ORIENTATION"])
+                                                                                                        , DBHelper.nvlString(dstemp.Tables[0].Rows[iloop]["HOMECELL"])
+                                                                                                        , DBHelper.nvlInt(dstemp.Tables[0].Rows[iloop]["MAXIMUM"])
+                                                                                                        , DBHelper.nvlString(dstemp.Tables[0].Rows[iloop]["CONTINUEMODE"])
+                                                                                                        , DBHelper.nvlInt(dstemp.Tables[0].Rows[iloop]["REPEATCOUNT"])
+                                                                                                        );
+                        dtinfo.Add(dtInfotemp);
+                    }
+
+                    // 데이터셋 조회
+                    ds = helper.FillDataSet(this.sProcedure, CommandType.StoredProcedure
+                   , helper.CreateParameter("AS_PARAMETER", this.sDataWhere, DbType.String, ParameterDirection.Input)
+                   );
+
+                    if (helper.RSCODE == "S")
+                    {
+                        if (ds.Tables.Count <= 0)
+                        {
+                            throw new Exception(this.sProcedure + " NO DATA!!");
+                        }
+                    }
+                    else
+                    {
+                        throw new Exception(helper.RSMSG);
+                    }
                 }
-
-                // 데이터셋 조회
-                ds = helper.FillDataSet(this.sProcedure, CommandType.StoredProcedure
-               , helper.CreateParameter("AS_PARAMETER", this.sDataWhere, DbType.String, ParameterDirection.Input)
-               );
-
-                if (ds.Tables.Count <= 0)
-                    throw new Exception(this.sProcedure + " NO DATA!!");
+                else
+                {
+                    throw new Exception(helper.RSMSG);
+                }
             }
             catch (Exception ex)
             {
@@ -147,7 +165,7 @@ namespace ExcelReportHelper
                 FileInfo fileInfo = new FileInfo(sFilePath);
                 if (!fileInfo.Exists)
                 {
-                    sFilePath = Application.StartupPath + "\\" + this.sFileName;    
+                    sFilePath = Application.StartupPath + "\\" + this.sFileName;
                     fileInfo = new FileInfo(sFilePath);
                     if (!fileInfo.Exists)
                     {
@@ -159,8 +177,8 @@ namespace ExcelReportHelper
                 PrintDialog printDialog = new PrintDialog();
                 if (printDialog.ShowDialog() == DialogResult.OK)
                 {
-                     sPrintName = printDialog.PrinterSettings.PrinterName;
-                    ExcelReport excelreport = new ExcelReport(sFilePath, this.dtinfo, this.ds);
+                    sPrintName = printDialog.PrinterSettings.PrinterName;
+                    WIZ.REPORT.ExcelReport excelreport = new REPORT.ExcelReport(sFilePath, this.dtinfo, this.ds);
                     excelreport.PrintReport(sPrintName);
                 }
             }

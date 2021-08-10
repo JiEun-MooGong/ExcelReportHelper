@@ -2,9 +2,6 @@
 /*--------------------------------------------------------------------------------------------
 CREATE       : 2021-06-10 JEJUN  
 DESCRIPT    : 레포트데이터그룹정보 클래스 
-
-UPDATE       :
-DESCRIPT    :  
 ---------------------------------------------------------------------------------------------*/
 #endregion
 
@@ -25,9 +22,10 @@ namespace ExcelReportHelper
         private string _sOrientation;  //1 : ORIENTATION = V  H 
         private string[] _sHomeCell;      //HOMECELL 
         private int _iMaxRow;            //MAXIMUM	
+        private string _sContinueMode;        //CONTINUEMODE
         private int _iReCnt;            //REPEATCOUNT		
 
-        internal ExeclReportDtInfo(int iId, string sOrientation, string sHomeCell, int iMaxRow, int iReCnt)
+        internal ExeclReportDtInfo(int iId, string sOrientation, string sHomeCell, int iMaxRow, string sContinueMode, int iReCnt)
         {
             this._iId = iId;
             this._sOrientation = sOrientation;
@@ -48,6 +46,7 @@ namespace ExcelReportHelper
             }
             this._sHomeCell = sHomeCell.Split(';');
             this._iMaxRow = iMaxRow;
+            this._sContinueMode = sContinueMode;
             this._iReCnt = iReCnt;
         }
 
@@ -74,6 +73,10 @@ namespace ExcelReportHelper
         internal int iMaxRow
         {
             get { return this._iMaxRow; }
+        }
+        internal string sContinueMode
+        {
+            get { return this._sContinueMode; }
         }
         internal int iReCnt
         {
