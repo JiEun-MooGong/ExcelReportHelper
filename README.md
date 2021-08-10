@@ -12,3 +12,7 @@ Program to process a specified Excel form
   Save data that starting cell and orientation etc.. for data area 
 3. ....  
   
+
+# Problems
+- error occurs when i tried insert rows to excel.
+- i'm devising to variety print mode such as Add row ...
