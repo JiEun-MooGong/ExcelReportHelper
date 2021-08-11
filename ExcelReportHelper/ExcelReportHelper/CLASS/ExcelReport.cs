@@ -90,7 +90,6 @@ namespace ExcelReportHelper
             returnobj[1] = iTransAlpha(sY);
             returnobj[3] = iTransAlpha(sY);
 
-            // end cell
             if (sR.Length > 1)
             {
                 sX = Regex.Replace(sR[1], @"\D", "");//숫자 추출
@@ -129,17 +128,16 @@ namespace ExcelReportHelper
         /// <param name="orientation"> 방향 </param>
         /// <param name="home">시작위치 </param>
         /// <returns></returns>
-        static int[] FindCell(Microsoft.Office.Interop.Excel.Worksheet ws, string elem, string orientation, string home)
+        static int[] FindCell(Microsoft.Office.Interop.Excel.Worksheet ws, string elem, string orientation, string range)
         {
             Microsoft.Office.Interop.Excel.Range rng = ws.UsedRange;   //현재 시트에서 사용중인 범위
             object[,] array = rng.Value; //범위의 데이터
 
             int[] returnVal = new int[4] { 0, 0, 0, 0 }; // start row , start column, end row, end solumn
-
             int rowEndIndx = array.GetLength(0);
             int colEndIndx = array.GetLength(1);
 
-            int[] homeindex = CellToXY(home);
+            int[] homeindex = CellToXY(range);
             int rowStartIndx = homeindex[0];
             int colStartIndx = homeindex[1];
 
@@ -180,11 +178,13 @@ namespace ExcelReportHelper
         /// 프린트 
         /// </summary>
         /// <param name="sPrintName"> 선택프린터이름</param>
-        internal void PrintReport(string sPrintName)
+        internal void PrintReport(string sPrintName, bool bSave)
         {
             try
             {
-                int iRepeatCnt = 0;  // 테이블 반복 횟수 
+                Microsoft.Office.Interop.Excel.Range oRange = null;
+                Microsoft.Office.Interop.Excel.Range oRange2 = null;
+
                 //-------------------------------
                 // 엑셀 오픈                   
                 excelApp = new Microsoft.Office.Interop.Excel.Application();
@@ -193,15 +193,55 @@ namespace ExcelReportHelper
                 //Microsoft.Office.Interop.Excel.Range rng = ws1.UsedRange;   //현재 시트에서 사용중인 범위
                 //rngData = rng.Value; //범위의 데이터
 
-                //-------------------------------
+                //-------------------------------                
+                int iRepeatCnt = 0;  // 테이블 반복 횟수 
                 for (int iLoop1 = 0; iLoop1 < dtinfo.Count; iLoop1++) // 데이터테이블
                 {
-
                     iRepeatCnt = 0;
                     dt = ds.Tables[iLoop1];
                     m_dtinfo = dtinfo[iLoop1];
                     for (int iLoop2 = 0; iLoop2 < dt.Rows.Count; iLoop2++) // 로우
                     {
+                        // MAXROW 넘었을때.
+                        if (iLoop2 >= m_dtinfo.iMaxRow)
+                        {
+                            switch (m_dtinfo.sContinueMode)
+                            {
+                                case "A":      // 로우 추가      
+                                    if (m_dtinfo.iH.Equals((int)1) ? true : false)
+                                    {
+                                        oRange = (Microsoft.Office.Interop.Excel.Range)ws1.Cells[m_CellLoc[2] + iLoop2, 1];
+                                        oRange = oRange.EntireRow;
+                                        oRange.Insert(Microsoft.Office.Interop.Excel.XlInsertShiftDirection.xlShiftDown, Microsoft.Office.Interop.Excel.XlInsertFormatOrigin.xlFormatFromLeftOrAbove);
+
+                                        oRange2 = (Microsoft.Office.Interop.Excel.Range)ws1.Cells[m_CellLoc[2] + iLoop2 + m_dtinfo.iH, 1];
+                                        oRange2 = oRange2.EntireRow;
+                                        oRange.Copy(oRange2);
+
+                                        //oRange.PasteSpecial(Microsoft.Office.Interop.Excel.XlPasteType.xlPasteAll, Microsoft.Office.Interop.Excel.XlPasteSpecialOperation.xlPasteSpecialOperationNone);
+                                    }
+                                    else if (m_dtinfo.iV.Equals((int)1) ? true : false)
+                                    {
+                                        oRange = (Microsoft.Office.Interop.Excel.Range)ws1.Cells[1, m_CellLoc[3] + m_dtinfo.iV + iLoop2];
+                                        oRange = oRange.EntireColumn;
+                                        oRange.Insert(Microsoft.Office.Interop.Excel.XlInsertShiftDirection.xlShiftToRight, Microsoft.Office.Interop.Excel.XlInsertFormatOrigin.xlFormatFromLeftOrAbove);
+                                    }
+                                    break;
+                                case "P":      // 새페이지.
+                                    //출력 처리 혹은... sheet 복사 ? 
+                                    iRepeatCnt = iRepeatCnt + 1;
+                                    break;
+                                case "R":      // 다른위치
+                                    if ((iLoop2 + 1) % m_dtinfo.iMaxRow == 0)
+                                        iRepeatCnt = iRepeatCnt + 1;
+                                    break;
+                                case "N":      // 없음. 해당데이터 종료.    
+                                default:
+                                    iRepeatCnt = iRepeatCnt + 1;
+                                    break;
+                            }//switch (m_dtinfo.sContinueMode)                       
+                        }
+
                         if (iRepeatCnt >= m_dtinfo.iReCnt)
                             break;
 
@@ -216,10 +256,16 @@ namespace ExcelReportHelper
                             {
                                 case "QR":
                                 case "QRCODE":
-                                    // QR 생성 처리 ... 
-                                    break;
-                                case "BARCODE":
-                                    // 바코드 생성 처리 ... 
+                                    //string tid = Convert.ToString(trSelectPrintContents.ManagedThreadId);
+                                    //string startPath = Application.StartupPath + "\\";
+                                    //QRCodeEncoder qr = new QRCodeEncoder();
+                                    //qr.QRCodeEncodeMode = QRCodeEncoder.ENCODE_MODE.BYTE;
+                                    //Image img = qr.Encode(dt.Rows[iLoop2][dt.Columns[iLoop3].ColumnName);
+                                    //img.Save(startPath + tid + ".png");
+
+                                    //ws1.Shapes.AddPicture(startPath + tid + ".png", Microsoft.Office.Core.MsoTriState.msoFalse, Microsoft.Office.Core.MsoTriState.msoCTrue, fLeft, fTop, 150, 150);
+
+                                    //File.Delete(startPath + tid + ".png");
                                     break;
                                 case "이미지":
                                 case "IMAGE":
@@ -231,14 +277,13 @@ namespace ExcelReportHelper
                                         string id = Convert.ToString(DateTime.Now.ToString("yyyyMMddhhmmss"));
                                         string startPath = Application.StartupPath + "\\";
 
-                                        Microsoft.Office.Interop.Excel.Range oRange = null;
                                         float fLeft = 0;
                                         float fTop = 0;
                                         float fHeight = 0;
                                         float fWidth = 0;
 
                                         oRange = (Microsoft.Office.Interop.Excel.Range)ws1.Cells[m_CellLoc[0], m_CellLoc[1]];
-                                        Microsoft.Office.Interop.Excel.Range oRange2 = (Microsoft.Office.Interop.Excel.Range)oRange.MergeArea;
+                                        oRange2 = (Microsoft.Office.Interop.Excel.Range)oRange.MergeArea;
 
                                         fLeft = (float)((double)oRange2.Left + (double)3);
                                         fTop = (float)((double)oRange2.Top + (double)3);
@@ -263,43 +308,17 @@ namespace ExcelReportHelper
                                     break;
                                 default:
                                     // 할당. ( 캡션의 위치 + 방향값 + 증가값 - 최대값이후
-                                    ws1.Cells[(m_dtinfo.iH.Equals((int)1) ? m_CellLoc[2] : m_CellLoc[0]) + m_dtinfo.iH + (m_dtinfo.iH * iLoop2) - (m_dtinfo.iH * iRepeatCnt * m_dtinfo.iMaxRow)
-                                                , (m_dtinfo.iV.Equals((int)1) ? m_CellLoc[3] : m_CellLoc[1]) + m_dtinfo.iV + (m_dtinfo.iV * iLoop2) - (m_dtinfo.iV * iRepeatCnt * m_dtinfo.iMaxRow)]
+                                    ws1.Cells[(m_dtinfo.iH.Equals((int)1) ? m_CellLoc[2] : m_CellLoc[0])
+                                        + m_dtinfo.iH + (m_dtinfo.iH * iLoop2) - (m_dtinfo.iH * iRepeatCnt * m_dtinfo.iMaxRow)
+                                                , (m_dtinfo.iV.Equals((int)1) ? m_CellLoc[3] : m_CellLoc[1])
+                                                + m_dtinfo.iV + (m_dtinfo.iV * iLoop2) - (m_dtinfo.iV * iRepeatCnt * m_dtinfo.iMaxRow)]
                                                  = dt.Rows[iLoop2][dt.Columns[iLoop3].ColumnName];
 
                                     break;
                             } //    switch
                         } // for (int iLoop3 
-
-                        // MAXROW 넘었을때.
-                        if (iLoop2 >= m_dtinfo.iMaxRow)
-                        {
-                            switch (m_dtinfo.sContinueMode)
-                            {
-                                case "N":      // 없음. 해당데이터 종료.    
-                                default:
-                                    iRepeatCnt = iRepeatCnt + 1;
-                                    break;
-                                case "A":      // 로우 추가     
-                                    // $$오류발생
-                                    if (m_dtinfo.iV == 1 ? true : false)
-                                        ws1.Columns.Insert(m_CellLoc[1] + m_dtinfo.iV + m_dtinfo.iMaxRow, Microsoft.Office.Interop.Excel.XlInsertFormatOrigin.xlFormatFromRightOrBelow);
-                                    else
-                                        ws1.Rows.Insert(m_CellLoc[0] + m_dtinfo.iH + m_dtinfo.iMaxRow, Microsoft.Office.Interop.Excel.XlInsertFormatOrigin.xlFormatFromRightOrBelow);
-                                    break;
-                                case "P":      // 새페이지.
-                                               //출력 처리 혹은... sheet 복사 ? 
-                                    iRepeatCnt = iRepeatCnt + 1;
-                                    break;
-                                case "R":      // 다른위치
-                                    if ((iLoop2 + 1) % m_dtinfo.iMaxRow == 0)
-                                        iRepeatCnt = iRepeatCnt + 1;
-                                    break;
-                            }//switch (m_dtinfo.sContinueMode)                       
-                        }
-
                     }// for (int iLoop2
-                }// for (int iLoop1
+                }// for (int iLoop1              
 
                 //-------------------------------
                 //print 
@@ -307,7 +326,6 @@ namespace ExcelReportHelper
                 //excelApp.Sheets.PrintPreview(true); //미리보기모드 
                 //ws1.PageSetup.PaperSize = Microsoft.Office.Interop.Excel.XlPaperSize.xlPaperA4; // A4로 설정
                 //ws1.PageSetup.Orientation = Microsoft.Office.Interop.Excel.XlPageOrientation.xlLandscape; //가로로 출력
-
                 ws1.PrintOut(1, Type.Missing, 1, false, sPrintName);
                 // (시작 페이지 번호, 마지막 페이지 번호, 출력 장 수, 프리뷰 활성 유/무, 활성프린터명, 파일로인쇄 (true), 여러장 한부씩 인쇄, 인쇄할 파일이름)                                              
                 // PrintOut ?
@@ -320,6 +338,14 @@ namespace ExcelReportHelper
                 // , object Collate   /// 여러 장을 한 부씩 인쇄하는 경우 true입니다.
                 // , object PrToFileName  /// PrintToFile이 true로 설정되면 이 인수는 인쇄할 파일의 이름을 지정합니다.
 
+                //엑셀 저장
+                if (bSave)
+                {
+                    if (Directory.Exists(Application.StartupPath + @"\EXCEL\") == false)
+                        Directory.CreateDirectory(Application.StartupPath + @"\EXCEL\");
+                    string sFilePath = Application.StartupPath + @"\EXCEL\" + Path.GetFileName(this.sFileName).Split('.')[0] + DateTime.Now.ToString("_yyyyMMddHHmmss");
+                    ws1.SaveAs(sFilePath, Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault);
+                }
             }
             catch (Exception ex)
             {
