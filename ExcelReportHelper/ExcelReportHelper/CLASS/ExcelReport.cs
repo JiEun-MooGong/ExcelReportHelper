@@ -28,6 +28,7 @@ namespace ExcelReportHelper
         Microsoft.Office.Interop.Excel.Application excelApp = null;
         Microsoft.Office.Interop.Excel.Workbook wb = null;
         Microsoft.Office.Interop.Excel.Worksheet ws1 = null; //sheet1
+        Microsoft.Office.Interop.Excel.Worksheet ws2 = null;
 
         string sFileName = "";
         DataSet ds = null;
@@ -184,12 +185,14 @@ namespace ExcelReportHelper
             {
                 Microsoft.Office.Interop.Excel.Range oRange = null;
                 Microsoft.Office.Interop.Excel.Range oRange2 = null;
+                int iHomeindx = 0;
 
                 //-------------------------------
                 // 엑셀 오픈                   
                 excelApp = new Microsoft.Office.Interop.Excel.Application();
                 wb = excelApp.Workbooks.Open(this.sFileName);
                 ws1 = wb.Worksheets.get_Item(1) as Microsoft.Office.Interop.Excel.Worksheet;
+                ws2 = wb.Worksheets.get_Item(wb.Worksheets.Count) as Microsoft.Office.Interop.Excel.Worksheet;
                 //Microsoft.Office.Interop.Excel.Range rng = ws1.UsedRange;   //현재 시트에서 사용중인 범위
                 //rngData = rng.Value; //범위의 데이터
 
@@ -200,6 +203,13 @@ namespace ExcelReportHelper
                     iRepeatCnt = 0;
                     dt = ds.Tables[iLoop1];
                     m_dtinfo = dtinfo[iLoop1];
+
+                    if (m_dtinfo.sContinueMode.Equals("P")) // 페이지원본생성
+                    {
+                        ws1.Copy(Type.Missing, ws2);
+                        ws1 = wb.Worksheets.get_Item(1) as Microsoft.Office.Interop.Excel.Worksheet;
+                    }
+
                     for (int iLoop2 = 0; iLoop2 < dt.Rows.Count; iLoop2++) // 로우
                     {
                         // MAXROW 넘었을때.
@@ -210,44 +220,62 @@ namespace ExcelReportHelper
                                 case "A":      // 로우 추가      
                                     if (m_dtinfo.iH.Equals((int)1) ? true : false)
                                     {
-                                        oRange = (Microsoft.Office.Interop.Excel.Range)ws1.Cells[m_CellLoc[2] + iLoop2, 1];
+                                        oRange = (Microsoft.Office.Interop.Excel.Range)ws1.Cells[m_CellLoc[2] + m_dtinfo.iH + iLoop2, 1];
                                         oRange = oRange.EntireRow;
                                         oRange.Insert(Microsoft.Office.Interop.Excel.XlInsertShiftDirection.xlShiftDown, Microsoft.Office.Interop.Excel.XlInsertFormatOrigin.xlFormatFromLeftOrAbove);
 
-                                        oRange2 = (Microsoft.Office.Interop.Excel.Range)ws1.Cells[m_CellLoc[2] + iLoop2 + m_dtinfo.iH, 1];
+                                        oRange2 = (Microsoft.Office.Interop.Excel.Range)ws1.Cells[m_CellLoc[2] + iLoop2, 1];
                                         oRange2 = oRange2.EntireRow;
-                                        oRange.Copy(oRange2);
+                                        oRange2.Copy();
 
-                                        //oRange.PasteSpecial(Microsoft.Office.Interop.Excel.XlPasteType.xlPasteAll, Microsoft.Office.Interop.Excel.XlPasteSpecialOperation.xlPasteSpecialOperationNone);
+                                        oRange = (Microsoft.Office.Interop.Excel.Range)ws1.Cells[m_CellLoc[2] + m_dtinfo.iH + iLoop2, 1];
+                                        oRange = oRange.EntireRow;
+                                        oRange.PasteSpecial(Microsoft.Office.Interop.Excel.XlPasteType.xlPasteAll, Microsoft.Office.Interop.Excel.XlPasteSpecialOperation.xlPasteSpecialOperationNone);
                                     }
                                     else if (m_dtinfo.iV.Equals((int)1) ? true : false)
                                     {
                                         oRange = (Microsoft.Office.Interop.Excel.Range)ws1.Cells[1, m_CellLoc[3] + m_dtinfo.iV + iLoop2];
-                                        oRange = oRange.EntireColumn;
+                                        oRange = oRange.EntireRow;
                                         oRange.Insert(Microsoft.Office.Interop.Excel.XlInsertShiftDirection.xlShiftToRight, Microsoft.Office.Interop.Excel.XlInsertFormatOrigin.xlFormatFromLeftOrAbove);
+
+                                        oRange2 = (Microsoft.Office.Interop.Excel.Range)ws1.Cells[m_CellLoc[3] + iLoop2, 1];
+                                        oRange2 = oRange2.EntireColumn;
+                                        oRange2.Copy();
+
+                                        oRange = (Microsoft.Office.Interop.Excel.Range)ws1.Cells[1, m_CellLoc[3] + m_dtinfo.iV + iLoop2];
+                                        oRange = oRange.EntireColumn;
+                                        oRange.PasteSpecial(Microsoft.Office.Interop.Excel.XlPasteType.xlPasteAll, Microsoft.Office.Interop.Excel.XlPasteSpecialOperation.xlPasteSpecialOperationNone);
                                     }
                                     break;
                                 case "P":      // 새페이지.
-                                    //출력 처리 혹은... sheet 복사 ? 
-                                    iRepeatCnt = iRepeatCnt + 1;
+                                    if ((iLoop2) % m_dtinfo.iMaxRow == 0)
+                                    {
+                                        iRepeatCnt = iRepeatCnt + 1;
+                                        ws2 = wb.Worksheets.get_Item(wb.Worksheets.Count) as Microsoft.Office.Interop.Excel.Worksheet;
+                                        ws2.Copy(Type.Missing, ws1);
+                                        ws1 = wb.Worksheets.get_Item(1 + iRepeatCnt) as Microsoft.Office.Interop.Excel.Worksheet;
+                                    }
                                     break;
                                 case "R":      // 다른위치
-                                    if ((iLoop2 + 1) % m_dtinfo.iMaxRow == 0)
+                                    if ((iLoop2) % m_dtinfo.iMaxRow == 0)
+                                    {
                                         iRepeatCnt = iRepeatCnt + 1;
+                                        iHomeindx = iRepeatCnt;
+                                    }
                                     break;
                                 case "N":      // 없음. 해당데이터 종료.    
                                 default:
                                     iRepeatCnt = iRepeatCnt + 1;
                                     break;
-                            }//switch (m_dtinfo.sContinueMode)                       
+                            }//switch (m_dtinfo.sContinueMode)           
                         }
 
                         if (iRepeatCnt >= m_dtinfo.iReCnt)
-                            break;
+                            break; // 로우 for문 나감. 
 
                         for (int iLoop3 = 0; iLoop3 < dt.Columns.Count; iLoop3++) // 캡션
                         {
-                            m_CellLoc = FindCell(ws1, dt.Columns[iLoop3].ColumnName, m_dtinfo.sOrientation, m_dtinfo.sHomeCell[iRepeatCnt]);
+                            m_CellLoc = FindCell(ws1, dt.Columns[iLoop3].ColumnName, m_dtinfo.sOrientation, m_dtinfo.sHomeCell[iHomeindx]);
 
                             if (m_CellLoc[0] == 0) // 캡션을 못찾는경우 0으로 반환함. 건너뜀.
                                 continue;
@@ -318,6 +346,13 @@ namespace ExcelReportHelper
                             } //    switch
                         } // for (int iLoop3 
                     }// for (int iLoop2
+
+                    if (m_dtinfo.sContinueMode.Equals("P")) // 페이지원본삭제
+                    {
+                        ws2 = wb.Worksheets.get_Item(wb.Worksheets.Count) as Microsoft.Office.Interop.Excel.Worksheet;
+                        ws2.Delete();
+                    }
+
                 }// for (int iLoop1              
 
                 //-------------------------------
@@ -326,7 +361,7 @@ namespace ExcelReportHelper
                 //excelApp.Sheets.PrintPreview(true); //미리보기모드 
                 //ws1.PageSetup.PaperSize = Microsoft.Office.Interop.Excel.XlPaperSize.xlPaperA4; // A4로 설정
                 //ws1.PageSetup.Orientation = Microsoft.Office.Interop.Excel.XlPageOrientation.xlLandscape; //가로로 출력
-                ws1.PrintOut(1, Type.Missing, 1, false, sPrintName);
+                wb.PrintOut(1, Type.Missing, 1, false, sPrintName);
                 // (시작 페이지 번호, 마지막 페이지 번호, 출력 장 수, 프리뷰 활성 유/무, 활성프린터명, 파일로인쇄 (true), 여러장 한부씩 인쇄, 인쇄할 파일이름)                                              
                 // PrintOut ?
                 // object From /// 인쇄를 시작할 페이지 번호입니다. 이 인수를 생략하면 인쇄가 처음부터 시작됩니다.
@@ -344,7 +379,7 @@ namespace ExcelReportHelper
                     if (Directory.Exists(Application.StartupPath + @"\EXCEL\") == false)
                         Directory.CreateDirectory(Application.StartupPath + @"\EXCEL\");
                     string sFilePath = Application.StartupPath + @"\EXCEL\" + Path.GetFileName(this.sFileName).Split('.')[0] + DateTime.Now.ToString("_yyyyMMddHHmmss");
-                    ws1.SaveAs(sFilePath, Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault);
+                    wb.SaveAs(sFilePath, Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault);
                 }
             }
             catch (Exception ex)
